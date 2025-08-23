@@ -11,7 +11,7 @@ import PIL.Image
 load_dotenv()
 
 # --- CLIENT INITIALIZATION ---
-client_vision = vision.ImageAnnotatorClient()
+
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 if not GOOGLE_API_KEY:
@@ -22,6 +22,8 @@ genai.configure(api_key=GOOGLE_API_KEY)
 # --- OCR FUNCTION ---
 def perform_ocr(image_path):
     """Reads handwriting from an image using Google Vision API."""
+    client_vision = vision.ImageAnnotatorClient()
+
     try:
         with open(image_path, 'rb') as image_file:
             content = image_file.read()
