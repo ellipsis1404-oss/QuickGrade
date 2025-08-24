@@ -19,7 +19,7 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'a-default-insecure-key-for-local-development-only')
 
 # DEBUG is True locally, but False in production on Render.
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # ALLOWED_HOSTS for local development. Render's hostname is added automatically.
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
@@ -113,8 +113,8 @@ REST_FRAMEWORK = {
 }
 # This reads the trusted origins from your Render environment variables.
 # The .split(',') allows you to add multiple domains later if needed.
-CORS_TRUSTED_ORIGINS = os.environ.get('CORS_TRUSTED_ORIGINS', 'http://localhost:5173').split(',')
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+CORS_TRUSTED_ORIGINS = os.environ.get('CORS_TRUSTED_ORIGINS', '').split(',')
 
 # --- STORAGE CONFIGURATION (Local vs. Production) ---
 # Check if we are running on Render (production)
