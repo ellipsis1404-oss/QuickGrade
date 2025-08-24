@@ -113,10 +113,14 @@ REST_FRAMEWORK = {
 }
 # This reads the trusted origins from your Render environment variables.
 # The .split(',') allows you to add multiple domains later if needed.
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173'
-).split(',')
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    # This pattern matches http://localhost:any-port
+    r"^http://localhost:\d+$",
+    
+    # This pattern will match your Cloudflare Pages URL
+    # It handles both the default .pages.dev and any custom domains you might add.
+    r"^https://.*\.pages\.dev$",
+]
 
 # --- STORAGE CONFIGURATION (Local vs. Production) ---
 # Check if we are running on Render (production)
