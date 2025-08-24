@@ -114,6 +114,7 @@ REST_FRAMEWORK = {
 # This reads the trusted origins from your Render environment variables.
 # The .split(',') allows you to add multiple domains later if needed.
 CORS_TRUSTED_ORIGINS = os.environ.get('CORS_TRUSTED_ORIGINS', 'http://localhost:5173').split(',')
+CORS_ALLOW_ALL_ORIGINS = True
 
 # --- STORAGE CONFIGURATION (Local vs. Production) ---
 # Check if we are running on Render (production)
