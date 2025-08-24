@@ -183,32 +183,49 @@ const showEditModal = ref(false);
 const answerToEdit = ref(null);
 const isReevaluatingId = ref(null);
 
+// frontend/src/components/TestWorkflow.vue
+
 // --- DATA FETCHING FUNCTIONS ---
 const fetchTestDetails = async () => {
     try {
         const testResp = await apiClient.get(`tests/${props.testId}/`);
         test.value = testResp.data;
+        
         const studentResp = await apiClient.get(`classes/${test.value.class_group}/students/`);
         students.value = studentResp.data;
-        if (students.value.length > 0 && !selectedStudentId.value) {
+        
+        // --- THIS IS A CRITICAL FIX ---
+        // Ensure a default is set only after students have loaded.
+        if (students.value.length > 0) {
             selectedStudentId.value = students.value[0].id;
         }
-    } catch (error) { console.error("Failed to fetch test details:", error); }
+    } catch (error) { 
+        console.error("Failed to fetch test details:", error); 
+    }
 };
+
 const fetchQuestions = async () => {
     try {
         const resp = await apiClient.get(`questions/?test=${props.testId}`);
         questions.value = resp.data;
-        if (questions.value.length > 0 && !selectedQuestionId.value) {
+        
+        // --- THIS IS A CRITICAL FIX ---
+        // Ensure a default is set only after questions have loaded.
+        if (questions.value.length > 0) {
             selectedQuestionId.value = questions.value[0].id;
         }
-    } catch (error) { console.error("Failed to fetch questions:", error); }
+    } catch (error) { 
+        console.error("Failed to fetch questions:", error); 
+    }
 };
+
 const fetchMarkingPrinciples = async () => {
     try {
         const response = await apiClient.get('marking-principles/');
         markingPrinciples.value = response.data;
-    } catch (error) { console.error("Failed to fetch marking principles:", error); }
+    } catch (error) { 
+        console.error("Failed to fetch marking principles:", error); 
+    }
 };
 const loadReport = async () => {
     activeTab.value = 'report';
