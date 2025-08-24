@@ -91,6 +91,32 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
             return StudentAnswerUploadSerializer
         return StudentAnswerEvaluationSerializer
 
+    @action(detail=False, methods=['get'])
+    def find(self, request):
+        """
+        Custom action to find a single StudentAnswer by student and question IDs.
+        e.g., /api/answers/find/?student=1&question=2
+        """
+        student_id = request.query_params.get('student')
+        question_id = request.query_params.get('question')
+        
+        if not student_id or not question_id:
+            return Response(
+                {"error": "Both student and question parameters are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Use get_object_or_404 to find the object or return a 404 if not found
+        answer = get_object_or_404(
+            StudentAnswer, 
+            student_id=student_id, 
+            question_id=question_id
+        )
+        
+        # Use the detailed serializer for the response
+        serializer = StudentAnswerEvaluationSerializer(answer, context={'request': request})
+        return Response(serializer.data)
+
     # --- THIS FUNCTION IS NOW INDENTED CORRECTLY ---
     @action(detail=True, methods=['post'])
     def run_ocr(self, request, pk=None):
@@ -139,7 +165,8 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
             answer.is_evaluated = True
             answer.save()
             
-            serializer = self.get_serializer(answer)
+            serializer = StudentAnswerEvaluationSerializer(answer, context={'request': request})
+        
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             print(f"!!! AI Marking CRASHED with error: {e}")

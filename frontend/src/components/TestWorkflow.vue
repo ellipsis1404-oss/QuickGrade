@@ -39,37 +39,51 @@
 
       <!-- Tab Content: Upload Answers -->
       <div v-if="activeTab === 'upload'">
-        <h3>Submit Student Answer</h3>
+  <h3>Submit Student Answer</h3>
+  <div class="form-group">
+    <label class="form-label">Select Student:</label>
+    <select v-model="selectedStudentId" class="form-input"><option v-for="s in students" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Select Question:</label>
+    <select v-model="selectedQuestionId" class="form-input"><option v-for="q in questions" :key="q.id" :value="q.id">Q{{ q.q_number }}</option></select>
+  </div>
+  <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+    <button @click="showCamera = true" class="btn btn-blue">Capture from Camera</button>
+    <div>
+        <label for="file-upload" class="btn btn-gray">Upload Image File</label>
+        <input id="file-upload" ref="fileUploadInput" type="file" @change="handleFileUpload" accept="image/*" style="display: none;" />
+    </div>
+  </div>
+  
+  <!-- OCR Panel -->
+  <div v-if="imageForOcr" class="card">
+    <h4>Step 2: Correct OCR Text & Evaluate</h4>
+    <p v-if="isOcrRunning" style="color: #6b7280;">Extracting text from image...</p>
+    <div v-else>
         <div class="form-group">
-          <label class="form-label">Select Student:</label>
-          <select v-model="selectedStudentId" class="form-input"><option v-for="s in students" :key="s.id" :value="s.id">{{ s.name }}</option></select>
+            <label class="form-label"><strong>Extracted Text (Editable):</strong></label>
+            <textarea v-model="ocrText" class="form-input" rows="8"></textarea>
         </div>
-        <div class="form-group">
-          <label class="form-label">Select Question:</label>
-          <select v-model="selectedQuestionId" class="form-input"><option v-for="q in questions" :key="q.id" :value="q.id">Q{{ q.q_number }}</option></select>
+        
+        <!-- --- THIS IS THE CORRECTED BUTTON LOGIC --- -->
+        <!-- Show EITHER the evaluate button OR the next student button -->
+        <div v-if="!evaluationMessage">
+          <button @click="runFinalEvaluation" :disabled="isEvaluating" class="btn btn-purple">
+              {{ isEvaluating ? 'Evaluating...' : 'Confirm and Evaluate' }}
+          </button>
         </div>
-        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-          <button @click="showCamera = true" class="btn btn-blue">Capture from Camera</button>
-          <div>
-              <label for="file-upload" class="btn btn-gray">Upload Image File</label>
-              <input id="file-upload" ref="fileUploadInput" type="file" @change="handleFileUpload" accept="image/*" style="display: none;" />
-          </div>
+        <div v-else>
+          <button @click="resetEvaluationState" class="btn btn-green">
+              Grade Next Student
+          </button>
         </div>
-        <div v-if="imageForOcr" class="card">
-          <h4>Step 2: Correct OCR Text & Evaluate</h4>
-          <p v-if="isOcrRunning" style="color: #6b7280;">Extracting text from image...</p>
-          <div v-else>
-              <div class="form-group">
-                  <label class="form-label"><strong>Extracted Text (Editable):</strong></label>
-                  <textarea v-model="ocrText" class="form-input" rows="8"></textarea>
-              </div>
-              <button @click="runFinalEvaluation" :disabled="isEvaluating" class="btn btn-purple">
-                  {{ isEvaluating ? 'Evaluating...' : 'Confirm and Evaluate' }}
-              </button>
-          </div>
-        </div>
-        <p v-if="evaluationMessage" style="margin-top: 0.75rem; font-weight: 600; color: #16a34a;">{{ evaluationMessage }}</p>
-      </div>
+
+    </div>
+  </div>
+  <!-- This message will now appear below the card and stay visible -->
+  <p v-if="evaluationMessage" style="margin-top: 0.75rem; font-weight: 600; color: #16a34a;">{{ evaluationMessage }}</p>
+</div>
 
       <!-- Tab Content: Report -->
       <div v-if="activeTab === 'report'">
@@ -102,7 +116,7 @@
               <button @click="exportReportToPDF" class="btn btn-green" :disabled="!answers.length">Export as PDF</button>
           </div>
       </div>
-    </div>
+    
 
     <!-- Question Modal -->
     <div v-if="showQuestionModal" class="modal-overlay">
@@ -146,6 +160,7 @@
 
     <!-- Camera Modal -->
     <CameraCapture v-if="showCamera" @close="showCamera = false" @photo-captured="handlePhotoCaptured" />
+  </div>
   </div>
 </template>
 
@@ -326,22 +341,55 @@ const handlePhotoCaptured = (photoBlob) => {
 };
 const runOcr = async () => {
     if (!selectedStudentId.value || !selectedQuestionId.value) {
-        alert("Please select a student and question.");
+        alert("Please select a student and question before capturing/uploading.");
         resetEvaluationState();
         return;
     }
     isOcrRunning.value = true;
     evaluationMessage.value = '';
-    const formData = new FormData();
-    formData.append('student', selectedStudentId.value);
-    formData.append('question', selectedQuestionId.value);
-    formData.append('uploaded_image', imageForOcr.value);
+    
     try {
-        const response = await apiClient.post('answers/', formData);
-        const answerId = response.data.id;
+        // --- THIS IS THE NEW "GET OR CREATE" LOGIC ---
+        
+        // 1. First, try to find an existing answer.
+        let existingAnswer = null;
+        try {
+            // We'll create a new backend endpoint for this lookup.
+            const findResponse = await apiClient.get(`answers/find/?student=${selectedStudentId.value}&question=${selectedQuestionId.value}`);
+            if (findResponse.data) {
+                existingAnswer = findResponse.data;
+            }
+        } catch (error) {
+            // A 404 error here is OK, it just means no answer exists yet.
+            if (error.response && error.response.status !== 404) {
+                throw error; // Re-throw other errors
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('student', selectedStudentId.value);
+        formData.append('question', selectedQuestionId.value);
+        formData.append('uploaded_image', imageForOcr.value);
+
+        let answerId;
+
+        if (existingAnswer) {
+            // 2. If it exists, UPDATE it with the new image (using PATCH).
+            console.log(`Found existing answer (ID: ${existingAnswer.id}). Updating with new image.`);
+            const updateResponse = await apiClient.patch(`answers/${existingAnswer.id}/`, formData);
+            answerId = updateResponse.data.id;
+        } else {
+            // 3. If it doesn't exist, CREATE it (using POST).
+            console.log("No existing answer found. Creating a new one.");
+            const createResponse = await apiClient.post('answers/', formData);
+            answerId = createResponse.data.id;
+        }
+
+        // 4. Now that we have a valid answerId, proceed with OCR.
         const ocrResponse = await apiClient.post(`answers/${answerId}/run-ocr/`);
         ocrText.value = ocrResponse.data.ocr_text;
         imageForOcr.value.tempAnswerId = answerId;
+
     } catch (error) {
         console.error("OCR step failed:", error.response?.data || error);
         evaluationMessage.value = `Error during OCR: ${error.response?.data?.detail || error.message}`;
@@ -359,8 +407,12 @@ const runFinalEvaluation = async () => {
         const evalResponse = await apiClient.post(`answers/${answerId}/run-marking/`, {
             corrected_text: ocrText.value
         });
+        
+        // This line updates the message successfully
         evaluationMessage.value = `Evaluation Complete! Mark: ${evalResponse.data.mark_gained} / ${evalResponse.data.question.max_mark}`;
-        resetEvaluationState();
+        
+        // CRITICAL: We DO NOT reset the state here. The user will do it.
+        
     } catch (error) {
         console.error("Marking step failed:", error.response?.data || error);
         evaluationMessage.value = `Error during marking: ${error.response?.data?.detail || error.message}`;

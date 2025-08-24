@@ -45,4 +45,10 @@ urlpatterns += [
         StudentAnswerViewSet.as_view({'post': 'run_marking'}), 
         name='studentanswer-run-marking'
     ),
+    
+    path(
+        'answers/find/',
+        StudentAnswerViewSet.as_view({'get': 'find'}),
+        name='studentanswer-find'
+    ),
 ]
