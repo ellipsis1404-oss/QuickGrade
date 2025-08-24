@@ -38,7 +38,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
 
-class MarkingPrincipleViewSet(viewsets.ReadOnlyModelViewSet):
+class MarkingPrincipleViewSet(viewsets.ModelViewSet):
     queryset = MarkingPrinciple.objects.all()
     serializer_class = MarkingPrincipleSerializer
 

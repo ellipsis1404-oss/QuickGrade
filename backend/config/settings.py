@@ -150,26 +150,44 @@ CORS_ALLOWED_ORIGINS = [
     # We will add your production frontend URL here later
 ]
 # Media files (for user-uploaded content like images)
+# backend/config/settings.py
+
+# --- STATIC FILES (Shared by both environments) ---
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# --- MEDIA FILES (Shared by both environments) ---
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
 
-# Media files (Supabase Storage)
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-SUPABASE_URL = os.environ.get('SUPABASE_URL')
-SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
-SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET')
+# --- STORAGE CONFIGURATION (Conditional) ---
+# This is the crucial part. We check if we are in production.
+# The 'RENDER' variable is automatically set by Render.com
+if os.environ.get('RENDER'):
+    # --- PRODUCTION SETTINGS (Render/Supabase) ---
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    # Supabase/S3 Storage Configuration
+    SUPABASE_URL = os.environ.get('SUPABASE_URL')
+    SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+    SUPABASE_BUCKET = os.environ.get('SUPABASE_BUCKET')
 
-# These are named AWS_... because django-storages uses that convention
-AWS_S3_ENDPOINT_URL = f"{SUPABASE_URL}/storage/v1"
-AWS_ACCESS_KEY_ID = SUPABASE_KEY
-AWS_SECRET_ACCESS_KEY = SUPABASE_KEY
-AWS_STORAGE_BUCKET_NAME = SUPABASE_BUCKET
-AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_ENDPOINT_URL = f"{SUPABASE_URL}/storage/v1"
+    AWS_ACCESS_KEY_ID = SUPABASE_KEY
+    AWS_SECRET_ACCESS_KEY = SUPABASE_KEY
+    AWS_STORAGE_BUCKET_NAME = SUPABASE_BUCKET
+    AWS_S3_FILE_OVERWRITE = False
+
+else:
+    # --- LOCAL DEVELOPMENT SETTINGS ---
+    # We don't need to define STORAGES for local development,
+    # Django's defaults for FileSystemStorage will be used.
+    # This keeps our local media in the /media/ folder.
+    pass

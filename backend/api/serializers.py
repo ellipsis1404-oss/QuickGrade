@@ -10,10 +10,11 @@ class ClassSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class StudentSerializer(serializers.ModelSerializer):
+    class_group_name = serializers.CharField(source='class_group.name', read_only=True)
     class Meta:
         model = Student
-        fields = '__all__'
-        read_only_fields = ('class_group',)
+        fields = ['id', 'name', 'class_group', 'class_group_name']
+        
 
 class MarkingPrincipleSerializer(serializers.ModelSerializer):
     class Meta:
