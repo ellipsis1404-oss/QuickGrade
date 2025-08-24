@@ -78,39 +78,47 @@
       <!-- Tab Content: Report -->
       <div v-if="activeTab === 'report'">
     <h3>Test Report & Individual Answers</h3>
+    
+    <!-- The list of answers -->
     <div v-if="!answers.length">
         <p>No student answers have been submitted for this test yet.</p>
     </div>
     <div v-else>
         <div v-for="answer in answers" :key="answer.id" class="list-item" style="cursor: default; flex-direction: column; align-items: start; gap: 0.5rem;">
+            <!-- ... (the content for each answer remains the same) ... -->
             <p><strong>{{ answer.student.name }} - Q{{ answer.question.q_number }}</strong></p>
-            
             <div v-if="answer.is_evaluated">
-                <p style="color: #16a34a; font-weight: bold;">Mark: {{ answer.mark_gained }} / {{ answer.question.max_mark }}</p>
-                <button @click="openEditModal(answer)" class="btn btn-blue" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-        Edit & Re-evaluate
-    </button>
-                <details>
-                    <summary>View Evaluation Details</summary>
-                    <p style="margin-top: 0.5rem;"><strong>Recognized Text:</strong> {{ answer.ocr_text }}</p>
-                    <p><strong>Strengths:</strong> {{ answer.ai_strength_points }}</p>
-                    <p><strong>Improvements:</strong> {{ answer.ai_improvement_points }}</p>
-                </details>
+              <p style="color: #16a34a; font-weight: bold;">Mark: {{ answer.mark_gained }} / {{ answer.question.max_mark }}</p>
+              <button @click="openEditModal(answer)" class="btn btn-blue" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.875rem;">Edit & Re-evaluate</button>
+              <details><summary>View Evaluation Details</summary>
+                <p style="margin-top: 0.5rem;"><strong>Recognized Text:</strong> {{ answer.ocr_text }}</p>
+                <p><strong>Strengths:</strong> {{ answer.ai_strength_points }}</p>
+                <p><strong>Improvements:</strong> {{ answer.ai_improvement_points }}</p>
+              </details>
             </div>
-            
-           <div v-else>
-                <p style="color: #ca8a04;">Status: Not yet evaluated.</p>
-                
-                <!-- IF this answer is the one being re-evaluated, show the spinner -->
-                <div v-if="isReevaluatingId === answer.id" class="spinner" style="margin-top: 0.5rem;"></div>
-
-                <!-- OTHERWISE, show the button -->
-                <button v-else @click="reEvaluateAnswer(answer.id)" class="btn btn-purple" style="margin-top: 0.5rem;">
-                    Run AI Evaluation Now
-                </button>
+            <div v-else>
+              <p style="color: #ca8a04;">Status: Not yet evaluated.</p>
+              <div v-if="isReevaluatingId === answer.id" class="spinner" style="margin-top: 0.5rem;"></div>
+              <button v-else @click="reEvaluateAnswer(answer.id)" class="btn btn-purple" style="margin-top: 0.5rem;">Run AI Evaluation Now</button>
             </div>
-      </div>
+        </div>
     </div>
+
+    <!-- Single Export Button at the bottom -->
+    <hr style="margin: 1.5rem 0;">
+    <button @click="exportReportToCSV" class="btn btn-blue" :disabled="!answers.length">
+        Export Full Report as CSV
+    </button>
+</div>
+
+<hr style="margin: 1.5rem 0;">
+<div style="display: flex; gap: 0.5rem;">
+    <button @click="exportReportToCSV" class="btn btn-blue" :disabled="!answers.length">
+        Export as CSV
+    </button>
+    <button @click="exportReportToPDF" class="btn btn-green" :disabled="!answers.length">
+        Export as PDF
+    </button>
 </div>
 
     </div>
@@ -166,6 +174,9 @@
      SCRIPT: The JavaScript logic for the component
      ================================================================= -->
 <script setup>
+
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
 import { ref, onMounted, watch } from 'vue';
 import axios from 'axios';
 import CameraCapture from './CameraCapture.vue';
@@ -200,24 +211,292 @@ const showEditModal = ref(false);
 const answerToEdit = ref(null);
 
 // --- DATA FETCHING FUNCTIONS ---
-const fetchTestDetails = async () => { /* ... unchanged ... */ };
-const fetchQuestions = async () => { /* ... unchanged ... */ };
-const fetchMarkingPrinciples = async () => { /* ... unchanged ... */ };
+// --- DATA FETCHING FUNCTIONS ---
+const fetchTestDetails = async () => {
+    try {
+        const testResp = await axios.get(`${API_BASE_URL}tests/${props.testId}/`);
+        test.value = testResp.data;
+        // Fetch students associated with the test's class
+        const studentResp = await axios.get(`${API_BASE_URL}classes/${test.value.class_group}/students/`);
+        students.value = studentResp.data;
+        // Set a default student selection
+        if (students.value.length > 0 && !selectedStudentId.value) {
+            selectedStudentId.value = students.value[0].id;
+        }
+    } catch (error) {
+        console.error("Failed to fetch test details:", error);
+    }
+};
+
+const fetchQuestions = async () => {
+    try {
+        const resp = await axios.get(`${API_BASE_URL}questions/?test=${props.testId}`);
+        questions.value = resp.data;
+        // Set a default question selection
+        if (questions.value.length > 0 && !selectedQuestionId.value) {
+            selectedQuestionId.value = questions.value[0].id;
+        }
+    } catch (error) {
+        console.error("Failed to fetch questions:", error);
+    }
+};
+
+const fetchMarkingPrinciples = async () => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}marking-principles/`);
+        markingPrinciples.value = response.data;
+    } catch (error) {
+        console.error("Failed to fetch marking principles:", error);
+    }
+};
+
 const loadReport = async () => {
     activeTab.value = 'report';
-    const allAnswersResp = await axios.get(`${API_BASE_URL}answers/?question__test=${props.testId}`);
-    answers.value = allAnswersResp.data;
+    try {
+        // We filter answers by the test ID on the backend for efficiency
+        const allAnswersResp = await axios.get(`${API_BASE_URL}answers/?question__test=${props.testId}`);
+        answers.value = allAnswersResp.data;
+    } catch (error) {
+        console.error("Failed to load report answers:", error);
+    }
 };
 
 // --- QUESTION MANAGEMENT FUNCTIONS ---
-const addQuestion = () => { /* ... unchanged ... */ };
-const editQuestion = (q) => { /* ... unchanged ... */ };
-const handleQuestionImageUpload = (event) => { /* ... unchanged ... */ };
-const saveQuestion = async () => { /* ... unchanged ... */ };
-const generateModelAnswer = async () => { /* ... unchanged ... */ };
+const addQuestion = () => {
+    // Reset the modal state for a new question
+    modalQuestion.value = {
+        q_number: questions.value.length + 1,
+        max_mark: 10,
+        description: '',
+        model_answer: '',
+        marking_scheme: ''
+    };
+    questionImageFile.value = null;
+    showQuestionModal.value = true;
+};
+
+const editQuestion = (q) => {
+    // Load the existing question data into the modal
+    modalQuestion.value = { ...q };
+    questionImageFile.value = null; // Reset file input
+    showQuestionModal.value = true;
+};
+
+const handleQuestionImageUpload = (event) => {
+    questionImageFile.value = event.target.files[0];
+};
+
+const saveQuestion = async () => {
+    const formData = new FormData();
+    // Manually append all fields to ensure correctness
+    formData.append('test', props.testId);
+    formData.append('q_number', modalQuestion.value.q_number);
+    formData.append('description', modalQuestion.value.description);
+    formData.append('max_mark', modalQuestion.value.max_mark);
+    formData.append('model_answer', modalQuestion.value.model_answer);
+    formData.append('marking_scheme', modalQuestion.value.marking_scheme);
+    
+    if (questionImageFile.value) {
+        formData.append('question_image', questionImageFile.value);
+    }
+
+    try {
+        if (modalQuestion.value.id) {
+            // Use PATCH for updates to handle partial data, especially with files
+            await axios.patch(`${API_BASE_URL}questions/${modalQuestion.value.id}/`, formData);
+        } else {
+            await axios.post(`${API_BASE_URL}questions/`, formData);
+        }
+        alert('Question saved successfully!');
+        showQuestionModal.value = false;
+        fetchQuestions(); // Refresh the list
+        fetchTestDetails(); // Refresh total marks
+    } catch (error) {
+        console.error("Failed to save question:", error.response?.data || error);
+        alert('Failed to save question. Check the browser console for details.');
+    }
+};
+
+const generateModelAnswer = async () => {
+    if (!modalQuestion.value.description || !modalQuestion.value.marking_scheme) {
+        alert('Please provide a Question Description and Marking Scheme first.');
+        return;
+    }
+    isGenerating.value = true;
+    const formData = new FormData();
+    formData.append('description', modalQuestion.value.description);
+    formData.append('marking_scheme', modalQuestion.value.marking_scheme);
+    if (questionImageFile.value) {
+        formData.append('question_image', questionImageFile.value);
+    }
+    try {
+        const response = await axios.post(`${API_BASE_URL}generate-model-answer/`, formData);
+        modalQuestion.value.model_answer = response.data.model_answer;
+    } catch (error) {
+        console.error("AI Generation failed:", error);
+        alert("Failed to generate model answer. Please check the console for details.");
+    } finally {
+        isGenerating.value = false;
+    }
+};
 
 // --- MARKING PRINCIPLE MANAGEMENT ---
-const onPrincipleChange = async () => { /* ... unchanged ... */ };
+const onPrincipleChange = async () => {
+    try {
+        // Use PATCH to update only the marking_principle field of the Test
+        await axios.patch(`${API_BASE_URL}tests/${props.testId}/`, {
+            marking_principle: test.value.marking_principle
+        });
+        alert('Marking principle updated successfully!');
+    } catch (error) {
+        console.error("Failed to update marking principle:", error.response?.data || error);
+        alert("Failed to update. See console for details.");
+    }
+};
+
+const exportReportToCSV = async () => {
+    await loadReport(); 
+    // --- THE FIX ---
+    // We now check the 'answers' array, which powers the new report view.
+    if (!answers.value.length) {
+        alert("No answers available to export.");
+        return;
+    }
+
+    // 1. Define the new, more detailed CSV Headers
+    const headers = [
+        'Student Name',
+        'Question Number',
+        'Mark Gained',
+        'Max Mark',
+        'Recognized Text',
+        'Strengths',
+        'Improvements',
+        'Model Answer'
+    ];
+    const csvRows = [headers.join(',')]; // Start with the header row
+
+    // 2. Add a detailed row for each answer
+    for (const answer of answers.value) {
+        // Helper function to clean text for CSV (handles commas and quotes)
+        const clean = (text) => `"${(text || '').replace(/"/g, '""')}"`;
+
+        const values = [
+            clean(answer.student.name),
+            answer.question.q_number,
+            answer.mark_gained,
+            answer.question.max_mark,
+            clean(answer.ocr_text),
+            clean(answer.ai_strength_points),
+            clean(answer.ai_improvement_points),
+            clean(answer.question.model_answer)
+        ];
+        csvRows.push(values.join(','));
+    }
+
+    // 3. Create the CSV Blob (this part is the same)
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+
+    // 4. Create a link and trigger the download (this part is the same)
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const filename = `Detailed_Report_${test.value.name.replace(/ /g, '_')}.csv`;
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};
+
+  // frontend/src/components/TestWorkflow.vue
+
+const exportReportToPDF = async () => {
+    await loadReport();
+
+    if (!answers.value.length) {
+        alert("No answers available to export.");
+        return;
+    }
+
+    const doc = new jsPDF();
+    
+    // --- PAGE 1: SUMMARY TABLE ---
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Evaluation Report: ${test.value.name}`, 14, 22);
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(100);
+    const className = answers.value[0]?.student?.class_group_name || 'N/A';
+    doc.text(`Class: ${className}`, 14, 30);
+    
+    const tableRows = [];
+    answers.value.forEach(answer => {
+        tableRows.push([
+            answer.student.name,
+            answer.question.q_number,
+            `${answer.mark_gained} / ${answer.question.max_mark}`,
+            answer.ai_evaluation_summary || '' // Use the full summary text
+        ]);
+    });
+
+    // --- THIS IS THE CRITICAL FIX for the summary table ---
+    autoTable(doc, { 
+        head: [["Student", "Q#", "Score", "Summary"]], 
+        body: tableRows, 
+        startY: 40,
+        headStyles: { fillColor: [41, 128, 185] }, // A nice blue color
+        // This tells the 'Summary' column to wrap its text
+        columnStyles: {
+            3: { cellWidth: 'auto' } 
+        }
+    });
+
+    // --- SUBSEQUENT PAGES: DETAILED BREAKDOWN FOR EVERY STUDENT ---
+    answers.value.forEach((answer) => {
+        doc.addPage(); // <-- Always add a new page for each student's details
+        
+        let currentY = 22; // Start near the top of the new page
+        const leftMargin = 14;
+        const usableWidth = 180;
+
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor(0);
+        doc.text(`Detailed Evaluation for: ${answer.student.name} - Q${answer.question.q_number}`, leftMargin, currentY);
+
+        currentY += 13; // Space after title
+        doc.setFontSize(11);
+        
+        const drawTextBlock = (title, text) => {
+            if (currentY > 260) {
+                doc.addPage();
+                currentY = 22;
+            }
+            doc.setFont(undefined, 'bold');
+            doc.text(title, leftMargin, currentY);
+            currentY += 7; 
+
+            doc.setFont(undefined, 'normal');
+            const lines = doc.splitTextToSize(text || 'N/A', usableWidth);
+            doc.text(lines, leftMargin, currentY);
+            currentY += lines.length * 4.5 + 8;
+        };
+
+        drawTextBlock("Recognized Text:", answer.ocr_text);
+        drawTextBlock("Strengths:", answer.ai_strength_points);
+        drawTextBlock("Improvements:", answer.ai_improvement_points);
+        drawTextBlock("Model Answer:", answer.question.model_answer);
+    });
+    
+    const filename = `PDF_Report_${test.value.name.replace(/ /g, '_')}.pdf`;
+    doc.save(filename);
+};
 
 // --- STUDENT ANSWER EVALUATION WORKFLOW ---
 const resetEvaluationState = () => { /* ... unchanged ... */ };
