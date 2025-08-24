@@ -171,7 +171,22 @@ class StudentAnswerViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(f"!!! AI Marking CRASHED with error: {e}")
             return Response({"detail": f"AI Marking failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    def create(self, request, *args, **kwargs):
+        try:
+            # This line calls the original, default create logic
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            # If ANY exception happens during the create process...
+            
+            # 1. Print the full traceback to the Render logs
+            import traceback
+            traceback.print_exc()
+            
+            # 2. Return a detailed 500 error response to the frontend
+            return Response(
+                {"error": "An unexpected error occurred on the server.", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 # ... (the standalone generate_model_answer_view function stays here, un-indented) ...
 
 # --- STANDALONE VIEW FUNCTION ---
