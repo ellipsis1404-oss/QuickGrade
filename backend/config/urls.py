@@ -4,8 +4,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse 
 
 urlpatterns = [
+    path("health/", lambda request: HttpResponse("OK"), name="health_check"),
     path('admin/', admin.site.urls),
     # This line tells Django that any URL starting with 'api/'
     # should be handled by the 'api' app's urls.
